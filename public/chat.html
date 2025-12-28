@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <title>AI Chatbot</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+<!-- Include marked.js for markdown parsing -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 body{
   margin:0;
@@ -20,39 +21,68 @@ header{
   background:#020617;
   text-align:center;
   font-weight:700;
+  font-size:18px;
 }
 #chat{
   flex:1;
   padding:15px;
   overflow-y:auto;
+  display:flex;
+  flex-direction:column;
 }
 .msg{
   margin-bottom:14px;
   line-height:1.5;
+  max-width:85%;
+  padding:10px 15px;
+  border-radius:12px;
 }
-.user{ color:#38bdf8; }
-.ai{ color:#a3e635; }
+.user{ 
+  color:#38bdf8; 
+  background:#1e293b;
+  align-self:flex-end;
+}
+.ai{ 
+  color:#a3e635; 
+  background:#1e293b;
+  align-self:flex-start;
+}
 footer{
   display:flex;
   gap:8px;
-  padding:10px;
+  padding:12px;
   background:#020617;
+  border-top:1px solid #1e293b;
 }
 textarea{
   flex:1;
   resize:none;
   border-radius:8px;
-  border:none;
-  padding:10px;
+  border:1px solid #1e293b;
+  padding:12px;
   font-size:15px;
+  background:#0f172a;
+  color:#fff;
+  font-family:inherit;
 }
 button{
-  padding:10px 16px;
+  padding:10px 20px;
   border:none;
   border-radius:8px;
   background:#22c55e;
+  color:#000;
   font-weight:700;
   cursor:pointer;
+  min-width:80px;
+}
+button:disabled{
+  background:#4ade80;
+  cursor:not-allowed;
+  opacity:0.7;
+}
+.typing{
+  font-style:italic;
+  opacity:0.7;
 }
 </style>
 </head>
@@ -61,166 +91,130 @@ button{
 
 <header>🤖 AI Chatbot</header>
 
-<div id="chat"></div>
+<div id="chat">
+  <div class="msg ai">Hello! I'm your AI assistant. How can I help you today?</div>
+</div>
 
 <footer>
-  <textarea id="input" placeholder="Type your message…"></textarea>
-  <button onclick="sendMessage()">Send</button>
+  <textarea id="input" placeholder="Type your message…" rows="1"></textarea>
+  <button id="sendBtn" onclick="sendMessage()">Send</button>
 </footer>
 
 <script>
 const chat = document.getElementById("chat");
 const input = document.getElementById("input");
+const sendBtn = document.getElementById("sendBtn");
 
-function addMessage(text, cls){
+function addMessage(text, className, isHTML = false) {
   const div = document.createElement("div");
-  div.className = "msg " + cls;
-  div.textContent = text;
+  div.className = `msg ${className}`;
+  
+  if (isHTML) {
+    div.innerHTML = text;
+  } else {
+    div.textContent = text;
+  }
+  
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
+  return div;
 }
 
-async function sendMessage(){
+function simulateTyping(element, text, callback) {
+  let i = 0;
+  element.innerHTML = "";
+  
+  function typeChar() {
+    if (i < text.length) {
+      element.innerHTML += text.charAt(i);
+      chat.scrollTop = chat.scrollHeight;
+      i++;
+      setTimeout(typeChar, 20); // Adjust typing speed
+    } else if (callback) {
+      callback();
+    }
+  }
+  
+  typeChar();
+}
+
+async function sendMessage() {
   const text = input.value.trim();
-  if(!text) return;
-
+  if (!text) return;
+  
+  // Add user message
+  addMessage(`You: ${text}`, "user");
   input.value = "";
-  addMessage("You: " + text, "user");
-  addMessage("AI is typing...", "ai");
-
+  
+  // Disable button and input during request
+  sendBtn.disabled = true;
+  input.disabled = true;
+  sendBtn.textContent = "Sending...";
+  
+  // Add typing indicator
+  const typingElement = addMessage("AI is thinking...", "ai typing");
+  
   try {
-    const res = await fetch("/api/chat", {
+    const response = await fetch("/api/chat", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text })
+      headers: { 
+        "Content-Type": "application/json" 
+      },
+      body: JSON.stringify({ 
+        message: text,
+        timestamp: new Date().toISOString()
+      })
     });
-
-    const data = await res.json();
-
-    // remove "AI is typing..."
-    const last = chat.lastChild;
-    if(last && last.textContent === "AI is typing..."){
-      chat.removeChild(last);
+    
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}`);
     }
-
-    if(data.reply){
-      addMessage("AI: " + data.reply, "ai");
-    } else {
-      addMessage("AI: No response received.", "ai");
+    
+    const data = await response.json();
+    
+    // Remove typing indicator
+    chat.removeChild(typingElement);
+    
+    // Add AI response with typing effect
+    const aiElement = addMessage("", "ai");
+    simulateTyping(aiElement, `AI: ${data.reply || "No response received."}`);
+    
+  } catch (error) {
+    console.error("Error:", error);
+    
+    // Remove typing indicator
+    if (typingElement.parentNode === chat) {
+      chat.removeChild(typingElement);
     }
-
-  } catch (err) {
-    const last = chat.lastChild;
-    if(last && last.textContent === "AI is typing..."){
-      chat.removeChild(last);
-    }
-    addMessage("AI: Server error. Please try again.", "ai");
+    
+    // Show error message
+    addMessage(`AI: Error - ${error.message}`, "ai");
+    
+  } finally {
+    // Re-enable button and input
+    sendBtn.disabled = false;
+    input.disabled = false;
+    sendBtn.textContent = "Send";
+    input.focus();
   }
 }
 
-input.addEventListener("keydown", e => {
-  if(e.key === "Enter" && !e.shiftKey){
+// Auto-resize textarea
+input.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = (this.scrollHeight) + 'px';
+});
+
+// Enter key to send (without Shift)
+input.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
   }
 });
-</script>
 
-</body>
-</html>.ai{color:#a3e635}
-footer{
-  display:flex;
-  gap:8px;
-  padding:10px;
-  background:#020617;
-}
-textarea{
-  flex:1;
-  resize:none;
-  border-radius:8px;
-  border:none;
-  padding:10px;
-  font-size:15px;
-}
-button{
-  padding:10px 16px;
-  border:none;
-  border-radius:8px;
-  background:#22c55e;
-  font-weight:700;
-  cursor:pointer;
-}
-</style>
-</head>
-
-<body>
-
-<header>🤖 AI Chatbot</header>
-
-<div id="chat"></div>
-
-<footer>
-  <textarea id="input" placeholder="Type your message…"></textarea>
-  <button onclick="send()">Send</button>
-</footer>
-
-<script>
-const chat = document.getElementById("chat");
-const input = document.getElementById("input");
-
-function addUser(text){
-  const div=document.createElement("div");
-  div.className="msg user";
-  div.textContent="You: " + text;
-  chat.appendChild(div);
-  chat.scrollTop=chat.scrollHeight;
-}
-
-function addAIPlaceholder(){
-  const div=document.createElement("div");
-  div.className="msg ai";
-  div.innerHTML="<em>AI is typing…</em>";
-  chat.appendChild(div);
-  chat.scrollTop=chat.scrollHeight;
-  return div;
-}
-
-function typeEffect(el, text){
-  el.innerHTML="";
-  const words = text.split(" ");
-  let i = 0;
-  const timer = setInterval(()=>{
-    el.innerHTML = marked.parse(words.slice(0,i).join(" "));
-    chat.scrollTop=chat.scrollHeight;
-    i++;
-    if(i > words.length) clearInterval(timer);
-  }, 35); // typing speed
-}
-
-async function send(){
-  const text=input.value.trim();
-  if(!text) return;
-  input.value="";
-  addUser(text);
-
-  const aiEl = addAIPlaceholder();
-
-  const r = await fetch("/api/chat",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ message:text })
-  });
-
-  const data = await r.json();
-  typeEffect(aiEl, data.reply);
-}
-
-input.addEventListener("keydown",e=>{
-  if(e.key==="Enter" && !e.shiftKey){
-    e.preventDefault();
-    send();
-  }
-});
+// Focus input on load
+input.focus();
 </script>
 
 </body>
