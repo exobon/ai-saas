@@ -4,6 +4,10 @@
 <meta charset="UTF-8" />
 <title>AI Chatbot</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- Markdown renderer -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 <style>
 body{
   margin:0;
@@ -26,8 +30,8 @@ header{
   overflow-y:auto;
 }
 .msg{
-  margin-bottom:12px;
-  line-height:1.4;
+  margin-bottom:14px;
+  line-height:1.5;
 }
 .user{color:#38bdf8}
 .ai{color:#a3e635}
@@ -43,9 +47,10 @@ textarea{
   border-radius:8px;
   border:none;
   padding:10px;
+  font-size:15px;
 }
 button{
-  padding:10px 14px;
+  padding:10px 16px;
   border:none;
   border-radius:8px;
   background:#22c55e;
@@ -54,6 +59,7 @@ button{
 }
 </style>
 </head>
+
 <body>
 
 <header>🤖 AI Chatbot</header>
@@ -61,7 +67,7 @@ button{
 <div id="chat"></div>
 
 <footer>
-  <textarea id="input" placeholder="Type your message..."></textarea>
+  <textarea id="input" placeholder="Type your message…"></textarea>
   <button onclick="send()">Send</button>
 </footer>
 
@@ -69,28 +75,51 @@ button{
 const chat = document.getElementById("chat");
 const input = document.getElementById("input");
 
-function add(text, cls){
-  const div = document.createElement("div");
-  div.className = "msg " + cls;
-  div.textContent = text;
+function addUser(text){
+  const div=document.createElement("div");
+  div.className="msg user";
+  div.textContent="You: " + text;
   chat.appendChild(div);
-  chat.scrollTop = chat.scrollHeight;
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function addAIPlaceholder(){
+  const div=document.createElement("div");
+  div.className="msg ai";
+  div.innerHTML="<em>AI is typing…</em>";
+  chat.appendChild(div);
+  chat.scrollTop=chat.scrollHeight;
+  return div;
+}
+
+function typeEffect(el, text){
+  el.innerHTML="";
+  const words = text.split(" ");
+  let i = 0;
+  const timer = setInterval(()=>{
+    el.innerHTML = marked.parse(words.slice(0,i).join(" "));
+    chat.scrollTop=chat.scrollHeight;
+    i++;
+    if(i > words.length) clearInterval(timer);
+  }, 35); // typing speed
 }
 
 async function send(){
-  const text = input.value.trim();
+  const text=input.value.trim();
   if(!text) return;
-  input.value = "";
-  add("You: " + text, "user");
+  input.value="";
+  addUser(text);
+
+  const aiEl = addAIPlaceholder();
 
   const r = await fetch("/api/chat",{
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ message: text })
+    body:JSON.stringify({ message:text })
   });
 
   const data = await r.json();
-  add("AI: " + data.reply, "ai");
+  typeEffect(aiEl, data.reply);
 }
 
 input.addEventListener("keydown",e=>{
