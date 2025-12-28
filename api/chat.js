@@ -18,14 +18,15 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "system",
-            content: "You are a helpful AI chatbot like ChatGPT."
+            content:
+              "You are a ChatGPT-like AI assistant. Respond in clean Markdown with headings, bullet points, and bold text. Be helpful and structured. Avoid unnecessary emojis."
           },
           {
             role: "user",
             content: message
           }
         ],
-        max_tokens: 300,
+        max_tokens: 400,
         temperature: 0.7
       })
     }
@@ -35,5 +36,7 @@ export default async function handler(req, res) {
 
   res.status(200).json({
     reply: data.choices?.[0]?.message?.content || "No response"
+  });
+}    reply: data.choices?.[0]?.message?.content || "No response"
   });
 }
